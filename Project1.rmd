@@ -1,0 +1,374 @@
+---
+title: "Project1"
+output: pdf_document
+---
+
+```{r}
+library(anytime)
+library(tidyr)
+library(lubridate)
+library(dplyr)
+library(reshape)
+library(ggplot2)
+library(ggmap)
+library(RColorBrewer)
+library(ggplot2)
+```
+
+```{r}
+fmarket<-read.csv("fmarket.csv",header = TRUE,stringsAsFactors = FALSE,
+                  na.strings = FALSE)
+SampleData<-fmarket
+SampleData$Season1Date<-anytime(SampleData$Season1Date)
+SampleData$Season2Date<-anytime(SampleData$Season2Date)
+SampleData$Season3Date<-anytime(SampleData$Season3Date)
+SampleData$Season4Date<-anytime(SampleData$Season4Date)
+SampleData<-SampleData[!is.na(SampleData$Season1Date)|!is.na(SampleData$Season2Date)|
+                         !is.na(SampleData$Season3Date)|!is.na(SampleData$Season4Date),]
+SampleData$year<-year(SampleData$Season1Date)
+SampleData$year[is.na(SampleData$year)]<-year(SampleData$Season2Date[is.na(SampleData$year)])
+SampleData$year[is.na(SampleData$year)]<-year(SampleData$Season3Date[is.na(SampleData$year)])
+SampleData$year[is.na(SampleData$year)]<-year(SampleData$Season4Date[is.na(SampleData$year)])
+```
+
+```{r}
+MidAtlantic<-c("Pennsylvania","New York",
+               "New Jersey","District of Columbia")
+MountainPlains<-c("Montana","Idaho","Colorado","Utah",
+                  "Wyoming","Nevada")
+
+Western <-c("California","Oregon","Washington","Alaska","Hawaii",
+            "Virgin Islands","Puerto Rico")
+
+Midwest <- c("Michigan","North Dakota","South Dakota",
+             "Iowa","Minnesota","Kansas","Nebraska","Ohio",
+             "Indiana","Illinois","Wisconsin","Missouri")
+Northeast<-c("Maine","Rhode Island","Vermont","Connecticut",
+             "New Hampshire","Massachusetts")
+Southwest<-c("Texas","Arizona","New Mexico","Oklahoma")
+Southeast<-c("Virginia","West Virginia","Kentucky","Delaware",
+             "Maryland","North Carolina","South Carolina","Tennessee",
+             "Arkansas","Louisiana","Florida","Georgia","Alabama","Mississippi")
+
+
+SampleData$Region[SampleData$State %in% MidAtlantic] <- "MidAtlantic"
+SampleData$Region[SampleData$State %in% MountainPlains] <- "MountainPlains"
+SampleData$Region[SampleData$State %in% Western] <- "Western"
+SampleData$Region[SampleData$State %in% Midwest] <- "Midwest"
+SampleData$Region[SampleData$State %in% Northeast] <- "Northeast"
+SampleData$Region[SampleData$State %in% Southeast] <- "Southeast"
+SampleData$Region[SampleData$State %in% Southwest] <- "Southwest"
+SampleData<-SampleData%>%filter(year!="2020")
+```
+
+```{r}
+cordinate<-c(left=-125,bottom=25,right=-65,top=50)
+Geo_Map<-get_stamenmap(cordinate,zoom = 5,maptype = "toner-lite")
+
+
+Geo_Map<-ggmap(Geo_Map)+
+  labs(x="Longitude",y="Latitude")
+```
+
+```{r}
+Geo_Map+
+  geom_point(data=SampleData,aes(x=x,y=y,colour=Region),size=.3)+
+  labs(title = "Distribution of Farmers Markets across US")+
+  scale_color_brewer(palette = "Set1")+
+  theme(plot.title = element_text(hjust = .5,face="bold.italic",color="#663300",size=16), 
+        legend.title = element_text(hjust = .5),
+        legend.text = element_text(size = 10,face = "bold"))
+ggsave("Markets_Distribution.png",dpi = 1080)
+```
+
+```{r}
+MarketsbyRegion<-SampleData%>%
+  group_by(year,Region)%>%
+  summarise(count=n())
+MarketsbyRegion%>%
+  group_by(Region)%>%
+  mutate(count=cumsum(count))%>%
+  ggplot(aes(x=factor(year),y=count,colour=Region))+
+  geom_point()+geom_line(aes(group=Region))+
+  scale_x_discrete(name="Year",breaks = seq(2010,2020,2))+
+  ylab("Number of Farmer Markets")+
+  labs(title = "Growth of Farmers market in different Regions")+
+  scale_color_brewer(palette = "Dark2")+
+  theme(plot.title = element_text(hjust = .5,face="bold.italic",color="#663300",size=16), 
+        legend.title = element_text(hjust = .5),
+        panel.background = element_rect(fill = "#FFFFCC",
+                                colour = "#FFFFCC",
+                                size = 0.5, linetype = "solid"),
+        legend.text = element_text(size = 10,face = "bold"),
+        axis.line = element_line("black"))
+ggsave("Growth of market.png",dpi = 1080)
+```
+
+```{r}
+SampleData%>%
+  group_by(State)%>%
+  summarise(count=n())%>%
+  top_n(8)%>%
+  ggplot(aes(x=reorder(State,count),y=count,fill=State,label=count))+
+  geom_bar(stat = "identity")+coord_flip()+
+  scale_fill_brewer(name="States",palette = "Set3")+
+  geom_text(vjust=.5,hjust=1)+
+  labs(title = "Top 8 States with maximum Markets")+
+  theme(plot.title = element_text(hjust = .5,
+                                  face="bold.italic",color="#663300",size=16),
+        legend.title = element_text(hjust = .5,face = "bold"),
+        legend.text = element_text(size = 10,face = "bold"),
+        strip.background = element_blank(),
+        panel.background=element_blank(),
+        axis.ticks = element_blank())+
+  scale_x_discrete(name=element_blank(),
+                   labels=element_blank())+
+  scale_y_discrete(name=element_blank())
+ggsave("Topstates.png",dpi = 1080)
+```
+
+```{r}
+ProduceType<-SampleData[,c(29,60,61)]%>%
+  group_by(year,Organic,Region)%>%
+  summarise(count=n())
+ProduceType%>%
+  group_by(Organic)%>%
+  ggplot(aes(x=factor(year),y=count,fill=Organic))+
+  geom_bar(stat="identity",position = "dodge")+
+  scale_x_discrete(name="Year",breaks = seq(2010,2020,2))+
+  ylab("Number of Farmer Markets")+
+  scale_fill_brewer(name="Produce Type",labels=c("Not Specified",
+                                               "Non Organic","Organic"),palette="Set1")+
+  ggtitle("Trend of Organic Market over year")+
+  theme(plot.title = element_text(hjust = .5,face="bold.italic",color="#663300",size=16),
+        panel.background = element_rect(fill = "#FFFFCC",
+                                colour = "#FFFFCC",
+                                size = 0.5, linetype = "solid"),
+        axis.line = element_line("black"),
+        legend.text = element_text(size = 10,face = "bold"))
+ggsave("trendoforganic.png",dpi = 1080)
+```
+```{r}
+Organic2013<-SampleData%>%
+  filter(year=="2012"|year=="2011"|year=="2013",Organic=="Y")
+
+Geo_Map+
+  geom_point(data=Organic2013,aes(x=x,y=y,colour=Region),size=.3)+
+  scale_color_brewer(palette = "Set1")+
+  labs(title = "Organic Markets in 2013")+
+  theme(plot.title = element_text(hjust = .5,face="bold.italic",color="#663300",size=16), 
+        legend.title = element_text(hjust = .5),
+        legend.text = element_text(size = 10,face = "bold"))
+ggsave("Organic Markets in 2013.png",dpi = 1080)
+```
+
+```{r}
+Organic<-SampleData%>%
+  filter(Organic=="Y",year!="2020")
+
+Geo_Map+
+  geom_point(data=Organic,aes(x=x,y=y,colour=Region),size=.3)+
+  scale_color_brewer(palette = "Set1")+
+  labs(title = "Organic Markets in 2019")+
+  theme(plot.title = element_text(hjust = .5,face="bold.italic",color="#663300",size=16), 
+        legend.title = element_text(hjust = .5),
+        legend.text = element_text(size = 10,face = "bold"))
+ggsave("Organic Markets in 2019.png",dpi = 1080)
+```
+
+```{r}
+ProduceType<-SampleData[,c(29,60,61)]%>%
+  group_by(year,Organic,Region)%>%
+  summarise(count=n())
+```
+
+```{r}
+ProduceType%>%
+  filter(Organic=="Y")%>%
+  group_by(Region)%>%
+  mutate(count=cumsum(count))%>%
+  ggplot(aes(x=factor(year),y=count,colour=Region))+
+  geom_point()+geom_line(aes(group=Region))+
+  scale_x_discrete(name="Year")+
+  ylab("Number of Farmer Markets")+
+  scale_color_hue(name="Region")+
+  labs(title = "Growth of Organic Markets across the country")+
+  theme(plot.title = element_text(hjust = .5,face="bold.italic",color="#663300",size=16), 
+        legend.title = element_text(hjust = .5),
+        legend.text = element_text(size = 10,face = "bold"),
+        panel.background = element_rect(fill = "#FFFFCC",
+                                colour = "#FFFFCC",
+                                size = 0.5, linetype = "solid"),
+        axis.line = element_line("black"))
+ggsave("organicgrowth.png",dpi = 1080)
+```
+
+```{r}
+melt.data.frame(SampleData[,c(24:28)],id.vars = NULL,variable_name = "Payment_Type")%>%
+  group_by(Payment_Type,value)%>%
+  summarise(count=n())%>%
+  ggplot(aes(x=value,y=count,fill=value,label=count))+
+  geom_bar(stat = "identity")+coord_flip()+
+  facet_grid(rows = vars(Payment_Type),switch = "y")+
+  labs(title = "Number of Markets accepting different Payment Types")+
+  scale_fill_brewer(name=element_blank(),palette = "Set3",labels=c("Not Accepted","Accepted"))+
+  geom_text(vjust=.5,hjust=1)+
+  theme(plot.title = element_text(hjust = .5,
+        face="bold.italic",color="#663300",size=16),
+        legend.title = element_text(hjust = .5,face = "bold"),
+        legend.text = element_text(size = 10,face = "bold"),
+        strip.background = element_blank(),
+        panel.background=element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_text(size = 12))+
+  scale_x_discrete(name=element_blank(),
+                   labels=element_blank())+
+  scale_y_discrete(name=element_blank())
+ggsave("Noofmarketpayment.png",dpi = 1080)  
+```
+
+```{r}
+Payments<-melt.data.frame(SampleData[,c(24:28,60,61)],id.vars=
+                            c("year","Region"),variable_name = "Payment_Type")%>%
+  filter(value=="Y")%>%
+  group_by(Payment_Type,year,value,Region)%>%
+  summarise(count=n())
+```
+
+```{r}
+Payments%>%
+  filter(Payment_Type=="Credit")%>%
+  group_by(Region)%>%
+  mutate(count=cumsum(count))%>%
+  ggplot(aes(x=factor(year),y=count,colour=Region))+
+  geom_point()+geom_line(aes(group=Region))+
+  scale_x_discrete(name="Year")+
+  ylab("Number of Farmer Markets")+
+  labs(title = "Evolution of Credit payment mode")+
+  theme(plot.title = element_text(hjust = .5,face="bold.italic",color="#663300",size=16), 
+        legend.title = element_text(hjust = .5),
+        legend.text = element_text(size = 10,face = "bold"),
+        panel.background = element_rect(fill = "#FFFFCC",
+                                colour = "#FFFFCC",
+                                size = 0.5, linetype = "solid"),
+        axis.line = element_line("black"))
+ggsave("credit.png",dpi = 1080)
+```
+
+```{r}
+Payments%>%
+  filter(Payment_Type=="SNAP")%>%
+  group_by(Region)%>%
+  mutate(count=cumsum(count))%>%
+  ggplot(aes(x=factor(year),y=count,colour=Region))+
+  geom_point()+geom_line(aes(group=Region))+
+  scale_x_discrete(name="Year")+
+  ylab("Number of Farmer Markets")+
+  labs(title = "Evolution of SNAP payment mode")+
+  theme(plot.title = element_text(hjust = .5,face="bold.italic",color="#663300",size=16), 
+        legend.title = element_text(hjust = .5),
+        legend.text = element_text(size = 10,face = "bold"),
+        panel.background = element_rect(fill = "#FFFFCC",
+                                colour = "#FFFFCC",
+                                size = 0.5, linetype = "solid"),
+        axis.line = element_line("black"))
+ggsave("Snap.png",dpi = 1080)
+```
+
+```{r}
+Payments%>%
+  filter(Payment_Type=="SFMNP")%>%
+  group_by(Region)%>%
+  mutate(count=cumsum(count))%>%
+  ggplot(aes(x=factor(year),y=count,colour=Region))+
+  geom_point()+geom_line(aes(group=Region))+
+  scale_x_discrete(name="Year")+
+  ylab("Number of Farmer Markets")+
+  labs(title = "Evolution of SFMNP payment mode")+
+  theme(plot.title = element_text(hjust = .5,face="bold.italic",color="#663300",size=16), 
+        legend.title = element_text(hjust = .5),
+        legend.text = element_text(size = 10,face = "bold"),
+        panel.background = element_rect(fill = "#FFFFCC",
+                                colour = "#FFFFCC",
+                                size = 0.5, linetype = "solid"),
+        axis.line = element_line("black"))
+ggsave("SFMNP.png",dpi = 1080)
+```
+
+```{r}
+Payments%>%
+  filter(Payment_Type=="WIC"|Payment_Type=="WICcash")%>%
+  group_by(Region,Payment_Type)%>%
+  mutate(count=cumsum(count))%>%
+  ggplot(aes(x=factor(year),y=count,colour=Region))+
+  geom_point()+geom_line(aes(group=Region))+
+  scale_x_discrete(name="Year",breaks=seq(2011,2019,2))+
+  facet_grid(~Payment_Type)+
+  ylab("Number of Farmer Markets")+
+  labs(title = "Evolution of WIC payment mode")+
+  theme(plot.title = element_text(hjust = .5,face="bold.italic",color="#663300",size=16), 
+        legend.title = element_text(hjust = .5),
+        legend.text = element_text(size = 10,face = "bold"),
+        panel.background = element_rect(fill = "#FFFFCC",
+                                colour = "#FFFFCC",
+                                size = 0.5, linetype = "solid"),
+        axis.line = element_line("black"),
+        strip.background = element_blank())
+ggsave("WIC.png",dpi = 1080)
+```
+
+```{r}
+Products<-melt.data.frame(SampleData[,c(30:58,60,61)],id.vars = c("year","Region"),
+                          variable_name = "Product")%>%
+  filter(value=="Y")%>%
+  group_by(year,Product,Region)%>%
+  summarise(count=n())%>%
+  spread(key = "Product",value = "count",fill = 0)
+
+Products<-gather(Products,key  = "Product",value =   "count",-year,-Region)
+```
+
+```{r}
+Products%>%
+  group_by(Product)%>%
+  mutate(count=cumsum(count))%>%
+  ggplot(aes(x=factor(year),y=Product,fill=(count)))+
+  geom_tile()+
+  scale_fill_gradient(name="No of Markets",low = "#CCE5FF",high = "#004C99")+
+  scale_x_discrete(name="Year",breaks=seq(2010,2020,2))+
+  ylab("Products")+
+  labs(title = "Trend of Different Produces over the Year")+
+  theme(plot.title = element_text(hjust = .5,face="bold.italic",color="#663300",size=16), 
+        legend.title = element_text(hjust = .5),
+        legend.text = element_text(size = 10,face = "bold"),
+        panel.background = element_rect(fill = "white",
+                                colour = "white",
+                                size = 0.5, linetype = "solid"),
+        axis.line = element_line("black"))
+ggsave("heatmap.png",dpi = 1080)
+```
+
+```{r}
+Social_media<-melt.data.frame(SampleData[,c(3:7,60)],id.vars = "year",variable_name = "SocialMedia_Type")%>%
+  filter(value!="")%>%
+  group_by(SocialMedia_Type,year)%>%
+  summarise(count=n())
+Social_media%>%
+  group_by(SocialMedia_Type)%>%
+  mutate(count=cumsum(count))%>%
+  ggplot(aes(x=factor(year),y=count,colour=SocialMedia_Type))+
+  geom_point()+geom_line(aes(group=SocialMedia_Type))+
+  labs(title = "Growth of Social media")+
+  scale_x_discrete(name="Year")+
+  ylab("Number of Markets")+
+  scale_colour_brewer(name="Year",palette = "Set1")+
+   theme(plot.title = element_text(hjust = .5,face="bold.italic",color="#663300",size=16), 
+        legend.title = element_text(hjust = .5),
+        legend.text = element_text(size = 10,face = "bold"),
+        panel.background = element_rect(fill = "#FFFFCC",
+                                colour = "#FFFFCC",
+                                size = 0.5, linetype = "solid"),
+        axis.line = element_line("black"),
+        strip.background = element_blank())
+ggsave("socialmedia.png",dpi = 1080)
+```
